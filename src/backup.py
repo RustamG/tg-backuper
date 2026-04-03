@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from telethon import TelegramClient
+from telethon.extensions import html as tg_html
+from src.html_export import generate_html
 from telethon.errors import FloodWaitError
 from telethon.tl.types import (
     MessageMediaPhoto,
@@ -14,6 +16,14 @@ from telethon.tl.types import (
     Chat,
     Channel,
 )
+
+
+def _to_html(msg) -> str:
+    if not msg.raw_text:
+        return ""
+    if not msg.entities:
+        return ""
+    return tg_html.unparse(msg.raw_text, msg.entities)
 
 
 def _chat_type(entity) -> str:
@@ -45,6 +55,44 @@ def _classify_media(media) -> str:
                 return "animation"
         return "document"
     return "other"
+
+
+async def _resolve_forward(client, msg, cache: dict) -> dict | None:
+    fwd = msg.fwd_from
+    if fwd is None:
+        return None
+
+    fwd_name = None
+    fwd_id = None
+
+    if fwd.from_id:
+        peer = fwd.from_id
+        uid = getattr(peer, "user_id", None) or getattr(peer, "channel_id", None) or getattr(peer, "chat_id", None)
+        if uid:
+            fwd_id = uid
+            if uid in cache:
+                fwd_name = cache[uid]
+            else:
+                try:
+                    entity = await client.get_entity(uid)
+                    if isinstance(entity, User):
+                        fwd_name = f"{entity.first_name or ''} {entity.last_name or ''}".strip()
+                    else:
+                        fwd_name = getattr(entity, "title", None)
+                    cache[uid] = fwd_name or str(uid)
+                    fwd_name = cache[uid]
+                except Exception:
+                    fwd_name = str(uid)
+                    cache[uid] = fwd_name
+
+    if not fwd_name:
+        fwd_name = fwd.from_name or "Unknown"
+
+    return {
+        "from_id": fwd_id,
+        "from_name": fwd_name,
+        "date": fwd.date.isoformat() if fwd.date else None,
+    }
 
 
 async def _resolve_sender(client, msg, cache: dict) -> tuple[int | None, str]:
@@ -122,6 +170,7 @@ async def run_backup(client: TelegramClient, dialog, output_dir: str, backup_typ
             continue
 
         sender_id, sender_name = await _resolve_sender(client, msg, sender_cache)
+        forwarded_from = await _resolve_forward(client, msg, sender_cache)
 
         media_file = None
         if has_media and backup_type in ("media", "both"):
@@ -137,8 +186,10 @@ async def run_backup(client: TelegramClient, dialog, output_dir: str, backup_typ
             "date": msg.date.isoformat() if msg.date else None,
             "from_id": sender_id,
             "from_name": sender_name,
-            "text": msg.text or "",
+            "text": msg.raw_text or "",
+            "text_html": _to_html(msg),
             "reply_to_msg_id": msg.reply_to.reply_to_msg_id if msg.reply_to else None,
+            "forwarded_from": forwarded_from,
             "media_type": media_type,
             "media_file": media_file,
         }
@@ -164,7 +215,14 @@ async def run_backup(client: TelegramClient, dialog, output_dir: str, backup_typ
     json_path = backup_dir / "messages.json"
     json_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    _status("  Generating HTML...")
+    me = await client.get_me()
+    html_path = generate_html(output, backup_dir, my_id=me.id if me else None)
+    _status("")
+    print()
+
     print(f"  Done! {len(messages)} messages backed up.")
     if backup_type in ("media", "both"):
         print(f"  Media files: {media_count}")
     print(f"  Output: {backup_dir}/")
+    print(f"  HTML:   {html_path}")
