@@ -71,7 +71,8 @@ body {
     margin-left: 8px;
     margin-top: 4px;
 }
-.reply {
+a.reply {
+    display: block;
     background: rgba(0,0,0,0.05);
     border-left: 3px solid #075e54;
     padding: 4px 8px;
@@ -81,6 +82,14 @@ body {
     color: #555;
     max-height: 50px;
     overflow: hidden;
+    text-decoration: none;
+    cursor: pointer;
+}
+a.reply:hover { background: rgba(0,0,0,0.1); }
+.msg.highlight { animation: highlight 1.5s ease; }
+@keyframes highlight {
+    0% { box-shadow: 0 0 0 3px rgba(7,94,84,0.5); }
+    100% { box-shadow: none; }
 }
 .text { white-space: pre-wrap; }
 .text code {
@@ -214,7 +223,8 @@ def _render_message(msg: dict, reply_map: dict, my_id: int | None) -> str:
             pass
 
     parts = []
-    parts.append(f'<div class="msg {side}" style="background:{color}">')
+    msg_id = msg.get("id", "")
+    parts.append(f'<div class="msg {side}" id="msg-{msg_id}" style="background:{color}">')
     parts.append(f'<div class="sender" style="color:{_sender_name_color(sender_id)}">{sender_name}</div>')
 
     fwd = msg.get("forwarded_from")
@@ -234,7 +244,7 @@ def _render_message(msg: dict, reply_map: dict, my_id: int | None) -> str:
         replied = reply_map[reply_id]
         reply_text = html.escape(replied.get("text", "")[:100])
         reply_sender = html.escape(replied.get("from_name", ""))
-        parts.append(f'<div class="reply"><b>{reply_sender}</b><br>{reply_text}</div>')
+        parts.append(f'<a href="#msg-{reply_id}" class="reply"><b>{reply_sender}</b><br>{reply_text}</a>')
 
     media_html = _render_media(msg)
     if media_html:
@@ -300,7 +310,21 @@ def generate_html(backup_data: dict, backup_dir: Path, my_id: int | None = None)
 
         parts.append(_render_message(msg, reply_map, my_id))
 
-    parts.append("</div></body></html>")
+    parts.append("</div>")
+    parts.append("""<script>
+document.querySelectorAll('a.reply').forEach(a => {
+    a.addEventListener('click', e => {
+        e.preventDefault();
+        const target = document.querySelector(a.getAttribute('href'));
+        if (!target) return;
+        target.scrollIntoView({behavior: 'smooth', block: 'center'});
+        target.classList.remove('highlight');
+        void target.offsetWidth;
+        target.classList.add('highlight');
+    });
+});
+</script>""")
+    parts.append("</body></html>")
 
     html_path = backup_dir / "chat.html"
     html_path.write_text("\n".join(parts), encoding="utf-8")

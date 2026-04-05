@@ -2,6 +2,12 @@
 
 CLI tool for backing up Telegram chats. Connects to your Telegram account, lets you pick a chat via an interactive terminal menu, and exports messages to JSON and a styled HTML file.
 
+## Screenshot
+
+![HTML export example](assets/screenshot.png)
+
+See the full [demo HTML](assets/demo.html) for an interactive preview.
+
 ## Features
 
 - Interactive chat selection with search
@@ -20,7 +26,7 @@ CLI tool for backing up Telegram chats. Connects to your Telegram account, lets 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/your-username/tg-backuper.git
+git clone https://github.com/RustamG/tg-backuper.git
 cd tg-backuper
 ```
 
