@@ -6,7 +6,7 @@ CLI tool for backing up Telegram chats. Connects to your Telegram account, lets 
 
 ![HTML export example](assets/screenshot.png)
 
-See the full [demo HTML](assets/demo.html) for an interactive preview.
+See the full [interactive demo](https://rustamg.github.io/tg-backuper/assets/demo.html) for a live preview.
 
 ## Features
 
